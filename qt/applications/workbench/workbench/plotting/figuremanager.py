@@ -16,12 +16,17 @@ from matplotlib._pylab_helpers import Gcf
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import FigureManagerBase
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.collections import LineCollection
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
 from qtpy.QtCore import QObject, Qt
-from qtpy.QtWidgets import QApplication, QLabel, QFileDialog
+from qtpy.QtGui import QColor
+from qtpy.QtWidgets import QApplication, QLabel, QFileDialog, QColorDialog, QToolButton, QWidgetAction, QMenu
 
 from mantid.api import AnalysisDataService, AnalysisDataServiceObserver, ITableWorkspace, MatrixWorkspace
 from mantid.kernel import logger
 from mantid.plots import datafunctions, MantidAxes
+from mantid.plots.legend import convert_color_to_hex
+from mantidqt.icons import get_icon
 from mantidqt.io import open_a_file_dialog
 from mantidqt.plotting.figuretype import FigureType, figure_type
 from mantidqt.utils.qt.qappthreadcall import QAppThreadCall
@@ -309,6 +314,11 @@ class FigureManagerWorkbench(FigureManagerBase, QObject):
                 not self.canvas.figure.get_axes()[0].is_waterfall():
             self.toolbar.set_waterfall_options_enabled(False)
 
+        # For contour and wireframe plots, add a toolbar option to change the colour of the lines.
+        if figure_type(self.canvas.figure) == FigureType.Image and \
+                any(isinstance(col, LineCollection) for col in self.canvas.figure.get_axes()[0].collections):
+            self.set_up_color_selector_toolbar_button()
+
     def destroy(self, *args):
         # check for qApp first, as PySide deletes it in its atexit handler
         if QApplication.instance() is None:
@@ -453,6 +463,42 @@ class FigureManagerWorkbench(FigureManagerBase, QObject):
     def update_toolbar_waterfall_plot(self, is_waterfall):
         self.toolbar.set_waterfall_options_enabled(is_waterfall)
         self.toolbar.set_generate_plot_script_enabled(not is_waterfall)
+
+    def set_up_color_selector_toolbar_button(self):
+        a = self.toolbar.addAction(get_icon('mdi.palette'), "Line Colour", lambda: None)
+
+        ax_collections = self.canvas.figure.get_axes()[0].collections
+        if any(isinstance(col, Line3DCollection) for col in ax_collections):
+            a.setToolTip("Set the colour of the wireframe.")
+        else:
+            a.setToolTip("Set the colour of the contour lines.")
+
+        line_collection = next(col for col in ax_collections if isinstance(col, LineCollection))
+        initial_colour = convert_color_to_hex(line_collection.get_color()[0])
+        initial_q_colour = QColor(initial_colour)
+
+        colour_dialog = QColorDialog()
+        colour_dialog.setOption(QColorDialog.NoButtons)
+        colour_dialog.setCurrentColor(initial_q_colour)
+        colour_dialog.currentColorChanged.connect(self.change_line_collection_colour)
+
+        button = [child for child in self.toolbar.children() if isinstance(child, QToolButton)][-1]
+
+        menu = QMenu("Menu", parent=button)
+        colour_selector_action = QWidgetAction(menu)
+        colour_selector_action.setDefaultWidget(colour_dialog)
+        menu.addAction(colour_selector_action)
+
+        button.setMenu(menu)
+        button.setPopupMode(QToolButton.InstantPopup)
+
+    def change_line_collection_colour(self, colour):
+        from matplotlib.collections import LineCollection
+        for col in self.canvas.figure.get_axes()[0].collections:
+            if isinstance(col, LineCollection):
+                col.set_color(colour.name())
+
+        self.canvas.draw()
 
 
 # -----------------------------------------------------------------------------
