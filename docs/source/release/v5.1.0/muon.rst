@@ -23,5 +23,7 @@ New Features
 - Addition of an external plotting button to the Muon Analysis 2 GUI.
   This allows the user to create a standalone Workbench (or MantidPlot) plot of the displayed data.
   The user may then perform standard operations on the plot, e.g drag and drop workspaces onto the figure.
+- Addition of background correction algorithm (PSIBackgroundCorrection) to remove the background present in
+  PSI bin data loaded using LoadPSIMuonBin.
 
 :ref:`Release 5.1.0 <v5.1.0>`
